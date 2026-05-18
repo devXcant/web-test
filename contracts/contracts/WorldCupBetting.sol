@@ -10,6 +10,7 @@ interface IReputationSystem {
     function getReputation(address user) external view returns (uint256);
 }
 
+// Assessment implementation (replaces the starter stub)
 contract WorldCupBetting is ReentrancyGuard, Ownable {
     struct Market {
         uint256 id;
@@ -46,6 +47,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
 
     uint256 public marketCount;
     uint256 public betCount;
+    // 2% fee on winning claims — scenario B
     uint256 public constant PLATFORM_FEE = 2;
     uint256 public constant FEE_DENOMINATOR = 100;
 
@@ -61,6 +63,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
     mapping(uint256 => bool) public positionsForSale;
     mapping(uint256 => uint256) public positionPrices;
 
+    // address(0) = ETH fees, else ERC20 token address
     mapping(address => uint256) public collectedFees;
 
     event MarketCreated(uint256 indexed marketId, address indexed creator, string question);
@@ -114,10 +117,11 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
         Market storage market = markets[_marketId];
 
         require(market.status == MarketStatus.Open, "Market not open");
-        require(block.timestamp < market.resolutionTime, "Market closed");
+        require(block.timestamp < market.resolutionTime, "Market closed"); // scenario E
         require(_outcomeIndex < market.outcomes.length, "Invalid outcome");
         require(_amount > 0, "Amount must be > 0");
 
+        // native ETH vs ERC20 collateral — scenario H uses token
         if (market.tokenAddress == address(0)) {
             require(msg.value == _amount, "Incorrect ETH amount");
         } else {
@@ -125,7 +129,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
         }
 
         uint256 shares = calculateShares(_marketId, _outcomeIndex, _amount);
-        require(shares >= _minShares, "Slippage exceeded");
+        require(shares >= _minShares, "Slippage exceeded"); // scenario F
 
         betCount++;
         Bet storage bet = bets[betCount];
@@ -153,7 +157,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
 
         require(msg.sender == market.arbitrator, "Only arbitrator");
         require(market.status == MarketStatus.Open, "Market not open");
-        require(block.timestamp >= market.resolutionTime, "Too early");
+        require(block.timestamp >= market.resolutionTime, "Too early"); // scenario C
         require(_winningOutcome < market.outcomes.length, "Invalid outcome");
 
         market.status = MarketStatus.Resolved;
@@ -180,7 +184,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
             uint256 fee = (payout * PLATFORM_FEE) / FEE_DENOMINATOR;
             uint256 netPayout = payout - fee;
 
-            collectedFees[market.tokenAddress] += fee;
+            collectedFees[market.tokenAddress] += fee; // owner withdraws via withdrawFees
 
             reputationSystem.updateReputation(msg.sender, true);
 
@@ -193,6 +197,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
 
             emit WinningsClaimed(_betId, msg.sender, netPayout);
         } else {
+            // losing side still claims once for reputation — scenario I
             bet.claimed = true;
             reputationSystem.updateReputation(msg.sender, false);
         }
@@ -229,6 +234,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
         address seller = bet.bettor;
         uint256 price = positionPrices[_betId];
 
+        // buyer owns the bet and can claim if outcome wins — scenario G
         bet.bettor = msg.sender;
         positionsForSale[_betId] = false;
 
@@ -276,6 +282,7 @@ contract WorldCupBetting is ReentrancyGuard, Ownable {
         view
         returns (uint256)
     {
+        // simple AMM-style share calc (same approach as PredictionMarket reference)
         uint256 currentPool = outcomePools[_marketId][_outcomeIndex];
         if (currentPool == 0) return _amount * 100;
 

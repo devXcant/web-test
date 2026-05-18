@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 
+// Assessment deploy: ReputationSystem -> WorldCupBetting -> link
 async function main() {
   console.log("Deploying WorldCupBetting assessment contracts...");
 
@@ -18,8 +19,7 @@ async function main() {
   await reputationSystem.setPredictionMarket(marketAddress);
   console.log("Connected ReputationSystem -> WorldCupBetting");
 
-  console.log("\n=== SUBMISSION: Deployed Contract Address ===");
-  console.log(marketAddress);
+  console.log("\nWorldCupBetting address (submit this):", marketAddress);
 }
 
 main().catch((error) => {
